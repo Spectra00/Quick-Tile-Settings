@@ -35,4 +35,15 @@ object Constants {
 
     // Shortcut intent extras
     const val EXTRA_DNS_ENTRY_ID = "extra_dns_entry_id"
+
+    // Hotspot Tile (root-based NAT tethering)
+    // Interface names are device-specific; verify with `ip link` / `dumpsys wifi` if the
+    // tile stops working after a firmware or kernel update.
+    const val HOTSPOT_WIFI_INTERFACE = "wlan2"
+    const val HOTSPOT_UPSTREAM_INTERFACE = "rmnet_data0"
+    const val HOTSPOT_SUBNET = "192.168.43.0/24"
+    const val HOTSPOT_START_COMMAND =
+        "cmd wifi start-softap && ndc nat enable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE 1 $HOTSPOT_SUBNET"
+    const val HOTSPOT_STOP_COMMAND =
+        "ndc nat disable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE ; cmd wifi stop-softap"
 }
