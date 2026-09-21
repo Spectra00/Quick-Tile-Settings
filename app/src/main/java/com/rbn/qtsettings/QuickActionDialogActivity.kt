@@ -4,12 +4,17 @@ import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.service.quicksettings.TileService
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.IntentCompat
+import androidx.core.content.edit
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,12 +38,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.rbn.qtsettings.data.DnsHostnameEntry
 import com.rbn.qtsettings.data.PreferencesManager
+import com.rbn.qtsettings.services.HotspotToggleTileService
 import com.rbn.qtsettings.services.PrivateDnsTileService
 import com.rbn.qtsettings.services.UsbDebuggingTileService
 import com.rbn.qtsettings.ui.theme.QuickTileSettingsTheme
+import com.rbn.qtsettings.utils.Constants
 import com.rbn.qtsettings.utils.Constants.DNS_MODE_AUTO
 import com.rbn.qtsettings.utils.Constants.DNS_MODE_OFF
 import com.rbn.qtsettings.utils.PermissionUtils
+import com.rbn.qtsettings.utils.RootShellExecutor
 import com.rbn.qtsettings.utils.SystemQuickActionResult
 import com.rbn.qtsettings.utils.SystemQuickActions
 
@@ -100,6 +108,9 @@ class QuickActionDialogActivity : ComponentActivity() {
                 flattenedComponent.contains(PrivateDnsTileService::class.java.name) ->
                     ComponentName(this@QuickActionDialogActivity, PrivateDnsTileService::class.java)
 
+                flattenedComponent.contains(HotspotToggleTileService::class.java.name) ->
+                    ComponentName(this@QuickActionDialogActivity, HotspotToggleTileService::class.java)
+
                 else -> null
             }
     }
@@ -115,6 +126,8 @@ class QuickActionDialogActivity : ComponentActivity() {
             QuickActionKind.DnsOff -> prefsManager.isDnsRequireUnlockEnabled()
 
             is QuickActionKind.UsbDebugging -> prefsManager.isUsbRequireUnlockEnabled()
+
+            is QuickActionKind.Hotspot -> false
         }
 
         val keyguardManager = getSystemService(KeyguardManager::class.java)
@@ -213,6 +226,8 @@ class QuickActionDialogActivity : ComponentActivity() {
                             ).show()
                     }
                 }
+
+                is QuickActionKind.Hotspot -> runHotspotQuickAction(kind.enable)
             }
         } catch (_: Exception) {
             Toast.makeText(this, R.string.toast_error_saving_settings, Toast.LENGTH_SHORT).show()
@@ -253,10 +268,49 @@ class QuickActionDialogActivity : ComponentActivity() {
         TileService.requestListeningState(this, ComponentName(this, serviceClass))
     }
 
+    private fun runHotspotQuickAction(enable: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Toast.makeText(this, R.string.toast_hotspot_unsupported_android, Toast.LENGTH_LONG)
+                .show()
+            return
+        }
+
+        val appContext = applicationContext
+        val command = if (enable) Constants.HOTSPOT_START_COMMAND else Constants.HOTSPOT_STOP_COMMAND
+        val mainHandler = Handler(Looper.getMainLooper())
+
+        Thread {
+            val result = RootShellExecutor.run(command)
+            mainHandler.post {
+                if (result.success) {
+                    appContext.getSharedPreferences(Constants.HOTSPOT_PREFS_NAME, MODE_PRIVATE)
+                        .edit { putBoolean(Constants.HOTSPOT_PREFS_KEY_ON, enable) }
+                    Toast.makeText(
+                        appContext,
+                        if (enable) R.string.toast_hotspot_started else R.string.toast_hotspot_stopped,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Log.e(
+                        "HotspotQuickAction",
+                        "Root command failed (exit ${result.exitCode}): ${result.output}"
+                    )
+                    Toast.makeText(appContext, R.string.toast_hotspot_command_failed, Toast.LENGTH_LONG)
+                        .show()
+                }
+                TileService.requestListeningState(
+                    appContext,
+                    ComponentName(appContext, HotspotToggleTileService::class.java)
+                )
+            }
+        }.start()
+    }
+
     private fun openApp(tileType: TileType) {
         val tileSource = when (tileType) {
             TileType.DNS -> PrivateDnsTileService::class.java.name
             TileType.USB -> UsbDebuggingTileService::class.java.name
+            TileType.HOTSPOT -> HotspotToggleTileService::class.java.name
             TileType.ALL -> null
         }
 
@@ -308,6 +362,7 @@ class QuickActionDialogActivity : ComponentActivity() {
                     text = when (tileType) {
                         TileType.DNS -> stringResource(R.string.quick_action_dns_title)
                         TileType.USB -> stringResource(R.string.quick_action_usb_title)
+                        TileType.HOTSPOT -> stringResource(R.string.quick_action_hotspot_title)
                         TileType.ALL -> stringResource(R.string.quick_action_title)
                     }
                 )
@@ -372,6 +427,7 @@ class QuickActionDialogActivity : ComponentActivity() {
 internal enum class TileType {
     DNS,
     USB,
+    HOTSPOT,
     ALL
 }
 
@@ -387,6 +443,7 @@ internal sealed interface QuickActionKind {
     data object DnsAuto : QuickActionKind
     data class DnsHostname(val entry: DnsHostnameEntry) : QuickActionKind
     data class UsbDebugging(val enable: Boolean) : QuickActionKind
+    data class Hotspot(val enable: Boolean) : QuickActionKind
 }
 
 internal object QuickActionResolver {
@@ -404,6 +461,10 @@ internal object QuickActionResolver {
                     componentNameText?.contains(PrivateDnsTileService::class.java.name) == true ->
                 TileType.DNS
 
+            componentName?.className == HotspotToggleTileService::class.java.name ||
+                    componentNameText?.contains(HotspotToggleTileService::class.java.name) == true ->
+                TileType.HOTSPOT
+
             else -> TileType.ALL
         }
     }
@@ -420,7 +481,27 @@ internal object QuickActionResolver {
         if (tileType == TileType.USB || tileType == TileType.ALL) {
             actions += buildUsbActions(context, prefsManager)
         }
+        if (tileType == TileType.HOTSPOT || tileType == TileType.ALL) {
+            actions += buildHotspotActions(context)
+        }
         return actions
+    }
+
+    private fun buildHotspotActions(context: Context): List<QuickAction> {
+        return listOf(
+            QuickAction(
+                label = context.getString(R.string.shortcut_hotspot_on_short),
+                description = context.getString(R.string.shortcut_hotspot_on_long),
+                iconRes = R.drawable.ic_hotspot_on,
+                kind = QuickActionKind.Hotspot(enable = true)
+            ),
+            QuickAction(
+                label = context.getString(R.string.shortcut_hotspot_off_short),
+                description = context.getString(R.string.shortcut_hotspot_off_long),
+                iconRes = R.drawable.ic_hotspot_off,
+                kind = QuickActionKind.Hotspot(enable = false)
+            )
+        )
     }
 
     private fun buildDnsActions(

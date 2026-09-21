@@ -23,7 +23,7 @@ class HotspotToggleTileService : TileService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val servicePrefs: SharedPreferences by lazy {
-        applicationContext.getSharedPreferences("hotspot_tile_service_state", MODE_PRIVATE)
+        applicationContext.getSharedPreferences(Constants.HOTSPOT_PREFS_NAME, MODE_PRIVATE)
     }
     private var isBusy = false
 
@@ -74,10 +74,10 @@ class HotspotToggleTileService : TileService() {
     }
 
     private fun isHotspotOn(): Boolean =
-        servicePrefs.getBoolean(KEY_HOTSPOT_ON, false)
+        servicePrefs.getBoolean(Constants.HOTSPOT_PREFS_KEY_ON, false)
 
     private fun setHotspotOn(on: Boolean) {
-        servicePrefs.edit { putBoolean(KEY_HOTSPOT_ON, on) }
+        servicePrefs.edit { putBoolean(Constants.HOTSPOT_PREFS_KEY_ON, on) }
     }
 
     private fun updateTile() {
@@ -98,9 +98,5 @@ class HotspotToggleTileService : TileService() {
             if (on) R.drawable.ic_hotspot_on else R.drawable.ic_hotspot_off
         )
         tile.updateTile()
-    }
-
-    companion object {
-        private const val KEY_HOTSPOT_ON = "hotspot_on"
     }
 }
