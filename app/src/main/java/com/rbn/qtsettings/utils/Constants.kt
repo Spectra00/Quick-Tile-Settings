@@ -42,8 +42,18 @@ object Constants {
     const val HOTSPOT_WIFI_INTERFACE = "wlan2"
     const val HOTSPOT_UPSTREAM_INTERFACE = "rmnet_data0"
     const val HOTSPOT_SUBNET = "192.168.43.0/24"
+
+    // `cmd wifi start-softap` requires an SSID and security type; bare "start-softap" is
+    // invalid. Security type is one of: open, owe, owe_transition, wpa2, wpa3,
+    // wpa3_transition. A passphrase is required (8-63 chars) for wpa2/wpa3/wpa3_transition
+    // and ignored otherwise. CHANGE HOTSPOT_PASSPHRASE below before building - this default
+    // is a placeholder, not a real secret.
+    const val HOTSPOT_SSID = "OnePlus15-Hotspot"
+    const val HOTSPOT_SECURITY_TYPE = "wpa2"
+    const val HOTSPOT_PASSPHRASE = "ChangeMe123"
+
     const val HOTSPOT_START_COMMAND =
-        "cmd wifi start-softap && ndc nat enable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE 1 $HOTSPOT_SUBNET"
+        "cmd wifi start-softap \"$HOTSPOT_SSID\" $HOTSPOT_SECURITY_TYPE \"$HOTSPOT_PASSPHRASE\" && ndc nat enable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE 1 $HOTSPOT_SUBNET"
     const val HOTSPOT_STOP_COMMAND =
         "ndc nat disable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE ; cmd wifi stop-softap"
 }
