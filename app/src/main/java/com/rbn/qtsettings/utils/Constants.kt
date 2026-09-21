@@ -55,7 +55,7 @@ object Constants {
     const val HOTSPOT_START_COMMAND =
         "cmd wifi start-softap \"$HOTSPOT_SSID\" $HOTSPOT_SECURITY_TYPE \"$HOTSPOT_PASSPHRASE\" && ndc nat enable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE 1 $HOTSPOT_SUBNET"
     const val HOTSPOT_STOP_COMMAND =
-        "ndc nat disable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE ; cmd wifi stop-softap"
+        "ndc nat disable $HOTSPOT_WIFI_INTERFACE $HOTSPOT_UPSTREAM_INTERFACE 1 $HOTSPOT_SUBNET ; cmd wifi stop-softap"
 
     // Shared between HotspotToggleTileService and QuickActionDialogActivity so both agree on
     // where the tile's last-known on/off state lives.
